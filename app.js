@@ -14,50 +14,44 @@ const PORT = process.env.PORT || 3000;
 // Connect to MongoDB
 connectDB();
 
+
 // Middleware
 app.use(express.json());
 app.use(cors());
 app.use(logRequest);
 
 
-// GET All Todos
+// GET Todos (with query filter)
 app.get('/todos', async (req, res, next) => {
+
   try {
-    const todos = await TodoModel.find();
+
+    const { completed } = req.query;
+
+    let filter = {};
+
+    if (completed !== undefined) {
+      filter.completed = completed === 'true';
+    }
+
+    const todos = await TodoModel.find(filter);
+
     res.status(200).json(todos);
+
   } catch (err) {
     next(err);
   }
+
 });
 
 
-// GET Active Todos
-app.get('/todos/active', async (req, res, next) => {
-  try {
-    const todos = await TodoModel.find({ completed: false });
-    res.status(200).json(todos);
-  } catch (err) {
-    next(err);
-  }
-});
-
-
-// GET Completed Todos
-app.get('/todos/completed', async (req, res, next) => {
-  try {
-    const todos = await TodoModel.find({ completed: true });
-    res.status(200).json(todos);
-  } catch (err) {
-    next(err);
-  }
-});
-
-
-// GET One Todo
+// GET One
 app.get('/todos/:id', async (req, res, next) => {
+
   try {
 
-    const todo = await TodoModel.findById(req.params.id);
+    const todo =
+      await TodoModel.findById(req.params.id);
 
     if (!todo) {
       return res.status(404).json({
@@ -70,10 +64,11 @@ app.get('/todos/:id', async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+
 });
 
 
-// POST Create Todo
+// POST
 app.post(
   '/todos',
   validateTodo,
@@ -81,7 +76,8 @@ app.post(
 
     try {
 
-      const newTodo = await TodoModel.create(req.body);
+      const newTodo =
+        await TodoModel.create(req.body);
 
       res.status(201).json(newTodo);
 
@@ -93,7 +89,7 @@ app.post(
 );
 
 
-// PATCH Update Todo
+// PATCH
 app.patch(
   '/todos/:id',
   validateTodoUpdate,
@@ -124,13 +120,15 @@ app.patch(
 );
 
 
-// DELETE Todo
+// DELETE
 app.delete('/todos/:id', async (req, res, next) => {
 
   try {
 
     const deletedTodo =
-      await TodoModel.findByIdAndDelete(req.params.id);
+      await TodoModel.findByIdAndDelete(
+        req.params.id
+      );
 
     if (!deletedTodo) {
       return res.status(404).json({
@@ -147,8 +145,8 @@ app.delete('/todos/:id', async (req, res, next) => {
 });
 
 
-// Error Handler (only once!)
-app.use(errorHandler);
+
+
 app.use(errorHandler); app.use((err, req, res, next) => { console.error(err.stack); res.status(err.status || 500).json({ message: err.message || 'Internal Server Error' }); });      
 
 // Start Server
