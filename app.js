@@ -1,50 +1,157 @@
 const express = require('express');
+const cors = require('cors');
+require('dotenv').config();
+
+const connectDB = require('./database/db');
+const { validateTodo, validateTodoUpdate } = require('./middleware/validator');
+const errorHandler = require('./middleware/errorHandler');
+const logRequest = require('./middleware/logger');
+const TodoModel = require('./todomodels/todo.model');
+
 const app = express();
-app.use(express.json()); // Parse JSON bodies
+const PORT = process.env.PORT || 3000;
 
-let todos = [
-  { id: 1, task: 'Learn Node.js', completed: false },
-  { id: 2, task: 'Build CRUD API', completed: false },
-];
+// Connect to MongoDB
+connectDB();
 
-// GET All – Read
-app.get('/todos', (req, res) => {
-  res.status(200).json(todos); // Send array as JSON
+// Middleware
+app.use(express.json());
+app.use(cors());
+app.use(logRequest);
+
+
+// GET All Todos
+app.get('/todos', async (req, res, next) => {
+  try {
+    const todos = await TodoModel.find();
+    res.status(200).json(todos);
+  } catch (err) {
+    next(err);
+  }
 });
 
-// POST New – Create
-app.post('/todos', (req, res) => {
-  const newTodo = { id: todos.length + 1, ...req.body }; // Auto-ID
-  todos.push(newTodo);
-  res.status(201).json(newTodo); // Echo back
+
+// GET Active Todos
+app.get('/todos/active', async (req, res, next) => {
+  try {
+    const todos = await TodoModel.find({ completed: false });
+    res.status(200).json(todos);
+  } catch (err) {
+    next(err);
+  }
 });
 
-// PATCH Update – Partial
-app.patch('/todos/:id', (req, res) => {
-  const todo = todos.find((t) => t.id === parseInt(req.params.id)); // Array.find()
-  if (!todo) return res.status(404).json({ message: 'Todo not found' });
-  Object.assign(todo, req.body); // Merge: e.g., {completed: true}
-  res.status(200).json(todo);
+
+// GET Completed Todos
+app.get('/todos/completed', async (req, res, next) => {
+  try {
+    const todos = await TodoModel.find({ completed: true });
+    res.status(200).json(todos);
+  } catch (err) {
+    next(err);
+  }
 });
 
-// DELETE Remove
-app.delete('/todos/:id', (req, res) => {
-  const id = parseInt(req.params.id);
-  const initialLength = todos.length;
-  todos = todos.filter((t) => t.id !== id); // Array.filter() – non-destructive
-  if (todos.length === initialLength)
-    return res.status(404).json({ error: 'Not found' });
-  res.status(204).send(); // Silent success
+
+// GET One Todo
+app.get('/todos/:id', async (req, res, next) => {
+  try {
+
+    const todo = await TodoModel.findById(req.params.id);
+
+    if (!todo) {
+      return res.status(404).json({
+        message: 'Todo not found'
+      });
+    }
+
+    res.status(200).json(todo);
+
+  } catch (err) {
+    next(err);
+  }
 });
 
-app.get('/todos/completed', (req, res) => {
-  const completed = todos.filter((t) => t.completed);
-  res.json(completed); // Custom Read!
+
+// POST Create Todo
+app.post(
+  '/todos',
+  validateTodo,
+  async (req, res, next) => {
+
+    try {
+
+      const newTodo = await TodoModel.create(req.body);
+
+      res.status(201).json(newTodo);
+
+    } catch (err) {
+      next(err);
+    }
+
+  }
+);
+
+
+// PATCH Update Todo
+app.patch(
+  '/todos/:id',
+  validateTodoUpdate,
+  async (req, res, next) => {
+
+    try {
+
+      const updatedTodo =
+        await TodoModel.findByIdAndUpdate(
+          req.params.id,
+          req.body,
+          { new: true }
+        );
+
+      if (!updatedTodo) {
+        return res.status(404).json({
+          message: 'Todo not found'
+        });
+      }
+
+      res.status(200).json(updatedTodo);
+
+    } catch (err) {
+      next(err);
+    }
+
+  }
+);
+
+
+// DELETE Todo
+app.delete('/todos/:id', async (req, res, next) => {
+
+  try {
+
+    const deletedTodo =
+      await TodoModel.findByIdAndDelete(req.params.id);
+
+    if (!deletedTodo) {
+      return res.status(404).json({
+        message: 'Todo not found'
+      });
+    }
+
+    res.status(204).send();
+
+  } catch (err) {
+    next(err);
+  }
+
 });
 
-app.use((err, req, res, next) => {
-  res.status(500).json({ error: 'Server error!' });
-});
 
-const PORT = 3002;
-app.listen(PORT, () => console.log(`Server on port ${PORT}`));
+// Error Handler (only once!)
+app.use(errorHandler);
+app.use(errorHandler); app.use((err, req, res, next) => { console.error(err.stack); res.status(err.status || 500).json({ message: err.message || 'Internal Server Error' }); });      
+
+// Start Server
+app.listen(PORT, () =>
+  console.log(`Server running on port ${PORT}`)
+);  
